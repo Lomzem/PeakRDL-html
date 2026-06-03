@@ -1,40 +1,35 @@
-[![build](https://github.com/SystemRDL/PeakRDL-html/workflows/build/badge.svg)](https://github.com/SystemRDL/PeakRDL-html/actions?query=workflow%3Abuild+branch%3Amaster)
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/peakrdl-html.svg)](https://pypi.org/project/peakrdl-html)
-
 # PeakRDL-html
-Generate address space documentation HTML from compiled SystemRDL input.
+Generate address space documentation HTML from SystemRDL input.
 
-For the command line tool, see the [PeakRDL project](https://peakrdl.readthedocs.io).
+## Install
 
-## Installing
-Install from [PyPi](https://pypi.org/project/peakrdl-html) using pip:
-
-    python3 -m pip install peakrdl-html
-
-
-## Example
-
-The easiest way to use PeakRDL-html is via the [PeakRDL command line tool](https://peakrdl.readthedocs.io/):
+Install this fork directly from Git:
 
 ```bash
-# Install the command line tool
-python3 -m pip install peakrdl
+python3 -m pip install git+ssh://your-company/PeakRDL-html.git
+```
 
-# Generate HTML
-peakrdl html your_design.rdl -o output_dir
+For local development from a checkout:
 
-# Generate a self-contained HTML file
+```bash
+python3 -m pip install -e ".[cli]"
+```
+
+
+## Usage
+
+Generate one self-contained HTML file:
+
+```bash
 peakrdl html-single your_design.rdl -o design.html
 ```
 
-Here is an [example of HTML output](https://systemrdl.github.io/PeakRDL-html) generated from a
-fictional SystemRDL register description: [turboencabulator.rdl](example/turboencabulator.rdl).
+The `-o` argument is an output file path. The parent directory must already
+exist.
 
+## Config
 
-## PeakRDL TOML config options
-
-If using the [PeakRDL command-line tool](https://peakrdl.readthedocs.io), some
-additional things can be configured via the TOML configuration file.
+Some options can be configured via PeakRDL's TOML configuration file.
 
 ```toml
 [html]
@@ -46,96 +41,33 @@ reverse_fields = false
 ```
 
 
-## Single-file HTML
+## Single-file Output
 
-The `html-single` exporter writes a self-contained HTML file instead of a
-directory of assets:
+The single-file output embeds:
 
-```bash
-peakrdl html-single your_design.rdl -o design.html
-```
+* Generated page content.
+* Register model data.
+* Search index data.
+* Built-in CSS and JavaScript.
+* Resolved local images referenced from Markdown descriptions.
+* Font Awesome icon fonts used by the UI.
 
-This embeds generated CSS, JavaScript, register data, search data, and content
-pages into `design.html`. MathJax is loaded from a CDN by default. To omit
-MathJax entirely:
+The single-file output does not support `user_static_dir`, since that option
+implies extra files outside the generated HTML document.
 
-```bash
-peakrdl html-single your_design.rdl -o design.html --mathjax disabled
-```
+## Python API
 
-The `-o` argument is a file path for `html-single`, unlike `html`, where `-o`
-is an output directory.
-
-
-## Reference
-
-### `HTMLExporter(**kwargs)`
-Constructor for the HTML exporter class
-
-**Optional Parameters**
-
-* `markdown_inst`
-    * Override the class instance of the Markdown processor.
-      See the [Markdown module](https://python-markdown.github.io/reference/#Markdown)
-      for more details.
-    * By default, the following extensions are loaded: 'extra', 'admonition', 'mdx_math'
-* `user_template_dir`
-    * Path to a directory where user-defined template overrides are stored.
-* `user_static_dir`
-    * Path to user-defined static content to copy to output directory.
-* `user_context`
-    * Additional context variables to load into the template namespace.
-* `show_signals`
-    * Show signal components. Default is False
-* `reverse_fields`
-    * Show fields in reverse order (LSB to MSB). Default is False (MSB to LSB).
-* `extra_doc_properties`
-    * List of properties to explicitly document.
-
-      Nodes that have a property explicitly set will show its value in a table
-      in the node's description. Use this to bring forward user-defined
-      properties, or other built-in properties in your documentation.
-* `generate_source_links`
-    * If `True`, attempts to generate links back to original RDL source deginitions.
-      Defaults to `True`.
-* `gitmetheurl_translators`
-    * Override the list of [GitMeTheURL](https://github.com/amykyta3/git-me-the-url/blob/master/README.md) translators to use when generating source links.
-      If unset, GitMeTheURL uses its builtin translators, as well as any installed plugins.
-
-
-### `HTMLExporter.export(node, output_dir, **kwargs)`
-Perform the export!
-
-**Parameters**
-
-* `nodes`
-    * Top-level node to export. Can be the top-level `RootNode` or any internal `AddrmapNode`.
-      Can also be a list of `RootNode` and any internal `AddrmapNode`.
-* `output_dir`
-    * HTML output directory.
-
-**Optional Parameters**
-
-* `footer`
-    * Override footer text.
-* `title`
-    * Override title text.
-* `home_url`
-    * If a URL is specified, adds a home button to return to a parent home page.
-* `skip_not_present`
-    * Control whether nodes with `ispresent=false` are generated. Default is True.
-
-
-### API Example
-Pass the elaborated output of the [SystemRDL Compiler](http://systemrdl-compiler.readthedocs.io)
-into the exporter.
-
-Assuming `root` is the elaborated top-level node, or an internal `AddrmapNode`:
+The same behavior is available from Python:
 
 ```python
 from peakrdl_html import HTMLExporter
 
 exporter = HTMLExporter()
+exporter.export_single_file(root, "design.html", mathjax="cdn")
+```
 
-exporter.export(root, "path/to/output")
+To disable MathJax:
+
+```python
+exporter.export_single_file(root, "design.html", mathjax="disabled")
 ```
