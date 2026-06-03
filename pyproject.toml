@@ -51,3 +51,4 @@ version = {attr = "peakrdl_html.__about__.__version__"}
 
 [project.entry-points."peakrdl.exporters"]
 html = "peakrdl_html.__peakrdl__:Exporter"
+html-single = "peakrdl_html.__peakrdl__:SingleFileExporter"

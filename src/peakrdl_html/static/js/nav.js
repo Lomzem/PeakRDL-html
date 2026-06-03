@@ -16,7 +16,11 @@ async function load_page(id) {
             init_reg_value();
             init_radix_buttons();
         }
-        MathJax.Hub.Queue(["Typeset", MathJax.Hub]);
+        if((typeof MathJax !== "undefined") && MathJax.Hub) {
+            MathJax.Hub.Queue(["Typeset", MathJax.Hub]);
+        } else {
+            window._PendingMathJaxTypeset = true;
+        }
         userHooks.onContentLoad();
     });
 
@@ -24,6 +28,10 @@ async function load_page(id) {
 }
 
 async function fetch_page_content(id){
+    if(typeof EmbeddedContent !== "undefined") {
+        return Promise.resolve(EmbeddedContent[id]);
+    }
+
     var path = "content/" + RAL.get_node_uid(id) + ".html?ts=" + BUILD_TS;
     var awaitable = fetch(path)
         .then(response => {

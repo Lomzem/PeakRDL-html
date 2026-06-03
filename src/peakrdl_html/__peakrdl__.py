@@ -70,9 +70,94 @@ class Exporter(ExporterSubcommandPlugin):
             extra_doc_properties=self.cfg['extra_doc_properties'],
             generate_source_links=generate_source_links,
         )
+        export_kwargs = {}
+        if options.title is not None:
+            export_kwargs["title"] = options.title
+        if options.home_url is not None:
+            export_kwargs["home_url"] = options.home_url
+
         html.export(
             top_node,
             options.output,
-            title=options.title,
-            home_url=options.home_url,
+            **export_kwargs,
+        )
+
+
+class SingleFileExporter(ExporterSubcommandPlugin):
+    short_desc = "Generate self-contained HTML documentation"
+    long_desc = "Generate a single self-contained dynamic HTML documentation page"
+
+    cfg_schema = {
+        "user_template_dir": schema.DirectoryPath(),
+        "user_static_dir": schema.DirectoryPath(),
+        "extra_doc_properties": [schema.String()],
+        "generate_source_links": schema.Boolean(),
+        "reverse_fields": schema.Boolean(),
+    }
+
+    def add_exporter_arguments(self, arg_group: 'argparse.ArgumentParser') -> None:
+        arg_group.add_argument(
+            "--title",
+            dest="title",
+            default=None,
+            help="Override title text"
+        )
+
+        arg_group.add_argument(
+            "--home-url",
+            dest="home_url",
+            metavar="URL",
+            default=None,
+            help="If a URL is specified, adds a home button to return to a parent home page"
+        )
+
+        arg_group.add_argument(
+            "--show-signals",
+            dest="show_signals",
+            default=False,
+            action="store_true",
+            help="Show signal components in generated doc pages"
+        )
+
+        arg_group.add_argument(
+            "--reverse-fields",
+            dest="reverse_fields",
+            default=False,
+            action="store_true",
+            help="Show fields in reverse order (LSB to MSB)"
+        )
+
+        arg_group.add_argument(
+            "--mathjax",
+            dest="mathjax",
+            choices=("cdn", "disabled"),
+            default="cdn",
+            help="MathJax loading mode for rendered math"
+        )
+
+    def do_export(self, top_node: 'AddrmapNode', options: 'argparse.Namespace') -> None:
+        generate_source_links = self.cfg['generate_source_links']
+        if generate_source_links is None:
+            generate_source_links = True
+
+        reverse_fields = options.reverse_fields or self.cfg['reverse_fields']
+
+        html = HTMLExporter(
+            show_signals=options.show_signals,
+            reverse_fields=reverse_fields,
+            user_template_dir=self.cfg['user_template_dir'],
+            user_static_dir=self.cfg['user_static_dir'],
+            extra_doc_properties=self.cfg['extra_doc_properties'],
+            generate_source_links=generate_source_links,
+        )
+        export_kwargs = {"mathjax": options.mathjax}
+        if options.title is not None:
+            export_kwargs["title"] = options.title
+        if options.home_url is not None:
+            export_kwargs["home_url"] = options.home_url
+
+        html.export_single_file(
+            top_node,
+            options.output,
+            **export_kwargs,
         )

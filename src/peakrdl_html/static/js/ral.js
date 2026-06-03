@@ -5,6 +5,11 @@ class RAL {
     static #ral_data_files = new Array(N_RAL_FILES).fill(null);
 
     static async load_ral_data(){
+        if(typeof EmbeddedRALData !== "undefined") {
+            this.#ral_data_files = EmbeddedRALData;
+            return;
+        }
+
         this.#init_progressbar();
 
         // Dispatch all JSON fetch requests in parallel

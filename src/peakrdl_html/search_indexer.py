@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple, Set, Union
+from typing import Any, Dict, List, Tuple, Set
 from collections import defaultdict, OrderedDict
 import re
 import hashlib
@@ -109,9 +109,9 @@ class SearchIndexer:
         return shorthash
 
 
-    def write_index_js(self, output_dir: str) -> None:
+    def get_index_data(self) -> Tuple[List[int], List[Dict[str, Any]]]:
         """
-        Writes out js files
+        Builds search index data.
 
         One or more bucket files (bkt-#.json):
             {
@@ -162,17 +162,11 @@ class SearchIndexer:
             # Store prefix in list in case there is a hash collision
             shorthash_map[shorthash].append(prefix)
 
-        # Write out JSON files
-        bucket_file_idx = 0 # current bucket file index
         last_hash_list = [] # List of last bucket hash inserted into each bucket file
+        bucket_file_dicts = [] # type: List[Dict[str, Any]]
         word_count = 0 # Number of words in current bucket file
-        bucket_file_dict = OrderedDict() # type: Dict[str, List[Union[str, List[Tuple[int, int]]]]]
+        bucket_file_dict = OrderedDict() # type: Dict[str, Any]
         shorthashes = sorted(shorthash_map.keys())
-
-        def _write_bucket_file() -> None:
-            path = os.path.join(output_dir, "bkt-%d.json" % bucket_file_idx)
-            with open(path, 'w', encoding='utf-8') as f:
-                json.dump(bucket_file_dict, f, separators=(',', ':'))
 
         for shorthash in shorthashes:
             # Load buckets
@@ -183,19 +177,52 @@ class SearchIndexer:
 
             # Split to a new file once word threshold is exceeded
             if word_count >= self.WORDS_PER_FILE_THRESHOLD:
-                # Write out json
-                _write_bucket_file()
+                bucket_file_dicts.append(bucket_file_dict)
                 last_hash_list.append(shorthash)
 
                 # reset for new file
-                bucket_file_idx += 1
                 word_count = 0
                 bucket_file_dict = OrderedDict()
 
-        # Write out remainder file
+        # Store remainder file
         if bucket_file_dict:
-            _write_bucket_file()
-            last_hash_list.append(shorthash)
+            bucket_file_dicts.append(bucket_file_dict)
+            last_hash_list.append(shorthashes[-1])
+
+        return last_hash_list, bucket_file_dicts
+
+
+    def write_index_js(self, output_dir: str) -> None:
+        """
+        Writes out js files
+
+        One or more bucket files (bkt-#.json):
+            {
+                "word_prefix": [    # bucket entry
+                    [               # word entry
+                        "word",
+                        [           # List of word locations
+                            [page_id, location_code],
+                            [page_id, location_code],
+                            ...
+                        ]
+                    ],
+                    ...
+                ],
+                ...
+            }
+
+        A bucket index file (bkt_index.js):
+            List of short hashes (see get_shorthash()) of the last prefix bucket
+            stored in each bucket file.
+            This will be used by the search to determine which bucket file to fetch
+        """
+        last_hash_list, bucket_file_dicts = self.get_index_data()
+
+        for bucket_file_idx, bucket_file_dict in enumerate(bucket_file_dicts):
+            path = os.path.join(output_dir, "bkt-%d.json" % bucket_file_idx)
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(bucket_file_dict, f, separators=(',', ':'))
 
         # Write out bucket file hash list
         path = os.path.join(output_dir, "bkt_index.js")

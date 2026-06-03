@@ -22,6 +22,9 @@ python3 -m pip install peakrdl
 
 # Generate HTML
 peakrdl html your_design.rdl -o output_dir
+
+# Generate a self-contained HTML file
+peakrdl html-single your_design.rdl -o design.html
 ```
 
 Here is an [example of HTML output](https://systemrdl.github.io/PeakRDL-html) generated from a
@@ -41,6 +44,27 @@ extra_doc_properties = ["list", "of", "properties"]
 generate_source_links = false
 reverse_fields = false
 ```
+
+
+## Single-file HTML
+
+The `html-single` exporter writes a self-contained HTML file instead of a
+directory of assets:
+
+```bash
+peakrdl html-single your_design.rdl -o design.html
+```
+
+This embeds generated CSS, JavaScript, register data, search data, and content
+pages into `design.html`. MathJax is loaded from a CDN by default. To omit
+MathJax entirely:
+
+```bash
+peakrdl html-single your_design.rdl -o design.html --mathjax disabled
+```
+
+The `-o` argument is a file path for `html-single`, unlike `html`, where `-o`
+is an output directory.
 
 
 ## Reference

@@ -1,0 +1,39 @@
+{% extends "index_base.html" %}
+
+{% block head %}
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>{{title}}</title>
+    <style>
+{{ inline_css | safe }}
+        @media (min-width:950px){
+            #_ContentContainer table {
+                max-width: none;
+            }
+        }
+    </style>
+    <script>
+        var BUILD_TS = {{build_ts}};
+{{ embedded_data_js | safe }}
+    </script>
+    {%- if mathjax == "cdn" %}
+    <script type="text/x-mathjax-config">
+        MathJax.Hub.Queue(function(){
+            if(window._PendingMathJaxTypeset) {
+                window._PendingMathJaxTypeset = false;
+                MathJax.Hub.Queue(["Typeset", MathJax.Hub]);
+            }
+        });
+        MathJax.Hub.Config({
+          config: ["MMLorHTML.js"],
+          jax: ["input/TeX", "output/HTML-CSS", "output/NativeMML"],
+          extensions: ["MathMenu.js", "MathZoom.js"]
+        });
+    </script>
+    <script async src="https://cdn.jsdelivr.net/npm/mathjax@2/MathJax.js"></script>
+    {%- endif %}
+    <script>
+{{ inline_js | safe }}
+    </script>
+{% endblock head %}
