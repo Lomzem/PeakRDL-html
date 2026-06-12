@@ -3,15 +3,17 @@ Generate address space documentation HTML from SystemRDL input.
 
 ## Install
 
-Install this fork directly from Git:
+Install directly from GitHub:
 
 ```bash
-python3 -m pip install git+ssh://your-company/PeakRDL-html.git
+python3 -m pip install git+https://github.com/Lomzem/PeakRDL-html.git
 ```
 
 For local development from a checkout:
 
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
 python3 -m pip install -e ".[cli]"
 ```
 
