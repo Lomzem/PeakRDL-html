@@ -6,7 +6,7 @@ Generate address space documentation HTML from SystemRDL input.
 Install directly from GitHub:
 
 ```bash
-python3 -m pip install git+https://github.com/Lomzem/PeakRDL-html.git
+python3 -m pip install peakrdl git+https://github.com/Lomzem/PeakRDL-html.git
 ```
 
 For local development from a checkout:
@@ -15,6 +15,14 @@ For local development from a checkout:
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install -e ".[cli]"
+```
+
+Or use `uv` if you're cool 😎:
+
+```bash
+uv venv
+source .venv/bin/activate
+uv pip install peakrdl git+https://github.com/Lomzem/PeakRDL-html.git
 ```
 
 
