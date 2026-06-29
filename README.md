@@ -46,6 +46,25 @@ peakrdl html-single your_design.rdl -o design.html
 The `-o` argument is an output file path. The parent directory must already
 exist.
 
+## Register Grouping
+
+Registers can be grouped in the HTML hierarchy with a string UDP named
+`doc_group`. Use `/` to create nested groups.
+
+```systemrdl
+property doc_group {
+    type = string;
+    component = reg;
+};
+
+reg {
+    doc_group = "Control Registers/System Control";
+    field {} enable[0:0];
+} control @ 0x0;
+```
+
+Registers without `doc_group` stay in the normal SystemRDL hierarchy.
+
 ## Config
 
 Some options can be configured via PeakRDL's TOML configuration file.

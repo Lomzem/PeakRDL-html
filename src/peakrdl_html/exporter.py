@@ -97,6 +97,9 @@ class HTMLExporter:
             table in the node's description.
             Use this to bring forward user-defined properties, or other built-in
             properties in your documentation.
+        doc_group UDP
+            Registers with a string ``doc_group`` property are grouped in the
+            HTML hierarchy. Use ``/`` in the property value for nested groups.
         """
         self.output_dir = "" # type: str
         self.RALData = [] # type: List[Dict[str, Any]]
