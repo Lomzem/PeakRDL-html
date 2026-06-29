@@ -1,3 +1,6 @@
 [submodule "external/repos/PeakRDL"]
 	path = external/repos/PeakRDL
 	url = git@github.com:SystemRDL/PeakRDL.git
+[submodule "external/repos/systemrdl-pro"]
+	path = external/repos/systemrdl-pro
+	url = https://github.com/seimei-d/systemrdl-pro
