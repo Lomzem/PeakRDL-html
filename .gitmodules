@@ -1,0 +1,3 @@
+[submodule "external/repos/PeakRDL"]
+	path = external/repos/PeakRDL
+	url = git@github.com:SystemRDL/PeakRDL.git
