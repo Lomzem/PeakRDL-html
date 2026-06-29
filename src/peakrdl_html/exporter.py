@@ -9,7 +9,7 @@ import base64
 import mimetypes
 import xml.dom.minidom
 from collections import OrderedDict
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Union, cast
 
 import jinja2 as jj
 import markdown
@@ -25,8 +25,49 @@ from .search_indexer import SearchIndexer
 from .__about__ import __version__
 
 if TYPE_CHECKING:
-    from typing import Any, Optional, Tuple, List, Dict, Union
     from systemrdl.source_ref import SourceRefBase
+
+class _DocGroupInst:
+    def __init__(self, addr_offset: int, total_size: int) -> None:
+        self.addr_offset = addr_offset
+        self.total_size = total_size
+
+
+class DocGroupNode:
+    """
+    Documentation-only grouping node.
+
+    These nodes are emitted into the HTML/RAL navigation model, but do not
+    correspond to SystemRDL components.
+    """
+    def __init__(self, name: str) -> None:
+        self.inst_name = name
+        self.raw_address_offset = 0
+        self.size = 0
+        self.total_size = 0
+        self.is_array = False
+        self.array_dimensions = [] # type: List[int]
+        self.array_stride = None # type: Optional[int]
+        self.inst = _DocGroupInst(0, 0)
+        self.children = OrderedDict() # type: OrderedDict[str, DocGroupNode]
+        self.regs = [] # type: List[RegNode]
+        self.abs_start = None # type: Optional[int]
+        self.abs_end = None # type: Optional[int]
+
+    def get_property(self, name: str, default: 'Any'=None) -> 'Any':
+        if name == "name":
+            return self.inst_name
+        return default
+
+    def get_html_name(self) -> str:
+        return self.inst_name
+
+    def get_html_desc(self, _markdown_inst: markdown.Markdown) -> None:
+        return None
+
+    def list_properties(self) -> 'List[str]':
+        return []
+
 
 class HTMLExporter:
     def __init__(self, **kwargs: 'Any') -> None:
@@ -66,8 +107,10 @@ class HTMLExporter:
         self.home_url = None # type: Optional[str]
         self.skip_not_present = True
         self.reverse_fields = False
-        self.current_top_node = None # type: AddrmapNode
+        self.current_top_node = None # type: Optional[AddressableNode]
         self.single_file_pages = None # type: Optional[Dict[int, str]]
+        self._doc_group_regs = [] # type: List[RegNode]
+        self._doc_group_reg_paths: Set[str] = set()
 
         self.user_static_dir = kwargs.pop("user_static_dir", None) # type: Optional[str]
         self.show_signals = kwargs.pop("show_signals", False)
@@ -116,7 +159,7 @@ class HTMLExporter:
 
         self.gmtu = GitMeTheURL(gmtu_translators)
 
-        self.indexer = None # type: SearchIndexer
+        self.indexer = None # type: Optional[SearchIndexer]
 
 
     def export(self, nodes: 'Union[Node, List[Node]]', output_dir: str, **kwargs: 'Dict[str, Any]') -> None:
@@ -181,7 +224,9 @@ class HTMLExporter:
 
         # Traverse trees
         for node in nodes:
+            assert isinstance(node, AddressableNode)
             self.current_top_node = node
+            self._doc_group_regs = self.collect_doc_group_regs(node)
             if node.get_property('bridge'):
                 node.env.msg.warning(
                     "HTML generator does not have proper support for bridge addmaps yet. The 'bridge' property will be ignored.",
@@ -237,7 +282,9 @@ class HTMLExporter:
         self.single_file_pages = {}
 
         for node in nodes:
+            assert isinstance(node, AddressableNode)
             self.current_top_node = node
+            self._doc_group_regs = self.collect_doc_group_regs(node)
             if node.get_property('bridge'):
                 node.env.msg.warning(
                     "HTML generator does not have proper support for bridge addmaps yet. The 'bridge' property will be ignored.",
@@ -249,18 +296,143 @@ class HTMLExporter:
         self.single_file_pages = None
 
 
-    def visit_addressable_node(self, node: AddressableNode, parent_id: 'Optional[int]'=None) -> int:
+    def collect_doc_group_regs(self, top_node: AddressableNode) -> 'List[RegNode]':
+        regs = [] # type: List[RegNode]
+        self._doc_group_reg_paths = set()
+        for node in top_node.descendants(unroll=False, skip_not_present=self.skip_not_present):
+            if not isinstance(node, RegNode):
+                continue
+            doc_group = self.get_doc_group_path(node)
+            if doc_group is not None:
+                regs.append(node)
+                self._doc_group_reg_paths.add(node.get_path())
+        return regs
+
+
+    def get_doc_group_path(self, node: RegNode) -> 'Optional[List[str]]':
+        if "doc_group" not in node.list_properties():
+            return None
+
+        value = node.get_property("doc_group", default=None)
+        if not isinstance(value, str) or not value:
+            return None
+
+        path = [] # type: List[str]
+        for segment in value.split("/"):
+            segment = segment.strip()
+            if not segment:
+                self.warn_invalid_doc_group(node, value, "contains an empty path segment")
+                return None
+            if any(c in segment for c in ".[]"):
+                self.warn_invalid_doc_group(
+                    node,
+                    value,
+                    "contains '.', '[' or ']', which conflict with HTML path syntax"
+                )
+                return None
+            path.append(segment)
+        return path
+
+
+    def warn_invalid_doc_group(self, node: RegNode, value: str, reason: str) -> None:
+        node.env.msg.warning(
+            "Ignoring doc_group=%r on register %s because it %s." % (
+                value,
+                node.get_path(),
+                reason
+            ),
+            node.property_src_ref.get("doc_group", node.inst_src_ref)
+        )
+
+
+    def build_doc_group_tree(self, top_node: AddressableNode) -> 'List[DocGroupNode]':
+        roots = OrderedDict() # type: OrderedDict[str, DocGroupNode]
+
+        for reg in sorted(self._doc_group_regs, key=self.get_abs_addr):
+            group_path = self.get_doc_group_path(reg)
+            if group_path is None:
+                continue
+
+            siblings = roots
+            group = None # type: Optional[DocGroupNode]
+            for segment in group_path:
+                group = siblings.get(segment)
+                if group is None:
+                    group = DocGroupNode(segment)
+                    siblings[segment] = group
+                siblings = group.children
+
+            assert group is not None
+            group.regs.append(reg)
+
+        root_groups = list(roots.values())
+        top_abs = self.get_abs_addr(top_node)
+        for group in root_groups:
+            self.update_doc_group_range(group, top_abs)
+        return root_groups
+
+
+    def update_doc_group_range(self, group: DocGroupNode, parent_abs: int) -> None:
+        abs_start = None # type: Optional[int]
+        abs_end = None # type: Optional[int]
+
+        for child in group.children.values():
+            self.update_doc_group_range(child, 0)
+            if child.abs_start is not None:
+                abs_start = child.abs_start if abs_start is None else min(abs_start, child.abs_start)
+                assert child.abs_end is not None
+                abs_end = child.abs_end if abs_end is None else max(abs_end, child.abs_end)
+
+        for reg in group.regs:
+            reg_abs = self.get_abs_addr(reg)
+            reg_end = reg_abs + reg.total_size
+            abs_start = reg_abs if abs_start is None else min(abs_start, reg_abs)
+            abs_end = reg_end if abs_end is None else max(abs_end, reg_end)
+
+        if abs_start is None:
+            abs_start = parent_abs
+            abs_end = parent_abs
+
+        assert abs_end is not None
+        group.abs_start = abs_start
+        group.abs_end = abs_end
+        group.raw_address_offset = abs_start - parent_abs
+        group.size = max(abs_end - abs_start, 0)
+        group.total_size = group.size
+        group.inst = _DocGroupInst(group.raw_address_offset, group.total_size)
+
+
+    def get_abs_addr(self, node: AddressableNode) -> int:
+        return int(getattr(node, "absolute_address", node.raw_address_offset))
+
+
+    def structural_node_has_visible_content(self, node: AddressableNode) -> bool:
+        if isinstance(node, RegNode):
+            return node.get_path() not in self._doc_group_reg_paths
+        if isinstance(node, MemNode):
+            return True
+
+        for child in node.children(skip_not_present=self.skip_not_present):
+            if not isinstance(child, AddressableNode):
+                continue
+            if self.structural_node_has_visible_content(child):
+                return True
+        return False
+
+
+    def visit_addressable_node(self, node: AddressableNode, parent_id: 'Optional[int]'=None, offset: 'Optional[int]'=None) -> int:
         self.current_id += 1
         this_id = self.current_id
         child_ids = [] # type: List[int]
 
+        assert self.indexer is not None
         self.indexer.add_node(node, this_id)
 
-        ral_entry = {
+        ral_entry: Dict[str, Any] = {
             'parent'    : parent_id,
             'children'  : child_ids,
             'name'      : node.inst_name,
-            'offset'    : BigInt(node.raw_address_offset),
+            'offset'    : BigInt(node.raw_address_offset if offset is None else offset),
             'size'      : BigInt(node.size),
         }
         if node.array_dimensions:
@@ -280,11 +452,11 @@ class HTMLExporter:
                     # support this, so stuff a 0 in its place
                     field_reset = 0
 
-                ral_field = {
+                ral_field: Dict[str, Any] = {
                     'name' : field.inst_name,
                     'lsb'  : field.lsb,
                     'msb'  : field.msb,
-                    'reset': BigInt(field_reset),
+                    'reset': BigInt(cast(int, field_reset)),
                     'disp' : 'H'
                 }
 
@@ -305,18 +477,80 @@ class HTMLExporter:
             self.RootNodeIds.append(this_id)
 
         # Recurse to children
-        children = OrderedDict()
+        children = OrderedDict() # type: OrderedDict[int, Union[Node, DocGroupNode]]
         for child in node.children(skip_not_present=self.skip_not_present):
             if not isinstance(child, AddressableNode):
+                continue
+            if not self.structural_node_has_visible_content(child):
                 continue
             child_id = self.visit_addressable_node(child, this_id)
             child_ids.append(child_id)
             children[child_id] = child
 
+        if parent_id is None and self._doc_group_regs:
+            for doc_group in self.build_doc_group_tree(node):
+                child_id = self.visit_doc_group_node(doc_group, this_id, self.get_abs_addr(node))
+                child_ids.append(child_id)
+                children[child_id] = doc_group
+
+            self.sort_children_by_offset(child_ids, children)
+
         # Generate page for this node
         self.write_page(this_id, node, children)
 
         return this_id
+
+
+    def visit_doc_group_node(self, node: DocGroupNode, parent_id: int, parent_abs: int) -> int:
+        self.current_id += 1
+        this_id = self.current_id
+        child_ids = [] # type: List[int]
+
+        offset = node.abs_start - parent_abs if node.abs_start is not None else node.raw_address_offset
+        node.raw_address_offset = offset
+        node.inst = _DocGroupInst(offset, node.total_size)
+
+        ral_entry: Dict[str, Any] = {
+            'parent'    : parent_id,
+            'children'  : child_ids,
+            'name'      : node.inst_name,
+            'offset'    : BigInt(offset),
+            'size'      : BigInt(node.size),
+            'doc_group' : True,
+        }
+        self.RALData.append(ral_entry)
+
+        children = OrderedDict() # type: OrderedDict[int, Union[Node, DocGroupNode]]
+        group_abs = node.abs_start if node.abs_start is not None else parent_abs
+
+        for child_group in node.children.values():
+            child_id = self.visit_doc_group_node(child_group, this_id, group_abs)
+            child_ids.append(child_id)
+            children[child_id] = child_group
+
+        for reg in node.regs:
+            reg_offset = self.get_abs_addr(reg) - group_abs
+            child_id = self.visit_addressable_node(reg, this_id, reg_offset)
+            child_ids.append(child_id)
+            children[child_id] = reg
+
+        self.sort_children_by_offset(child_ids, children)
+        self.write_page(this_id, node, children)
+        return this_id
+
+
+    def sort_children_by_offset(self, child_ids: 'List[int]', children: 'OrderedDict[int, Union[Node, DocGroupNode]]') -> None:
+        def sort_key(item: 'Tuple[int, Union[Node, DocGroupNode]]') -> 'Tuple[int, str]':
+            child = cast(Any, item[1])
+            return child.raw_address_offset, child.inst_name
+
+        ordered_items = sorted(
+            children.items(),
+            key=sort_key
+        )
+        child_ids[:] = [child_id for child_id, _child in ordered_items]
+        children.clear()
+        children.update(ordered_items)
 
 
     def write_ral_data(self) -> None:
@@ -373,21 +607,21 @@ class HTMLExporter:
         RegNode     : "reg.html",
     }
 
-    def write_page(self, this_id: int, node: Node, children: 'Dict[int, Node]') -> None:
+    def write_page(self, this_id: int, node: 'Union[Node, DocGroupNode]', children: 'Dict[int, Union[Node, DocGroupNode]]') -> None:
         text = self.render_page(this_id, node, children)
         if self.single_file_pages is not None:
             self.single_file_pages[this_id] = text
             return
 
-        uid = self.get_node_uid(node)
+        uid = self.get_node_uid(this_id)
         output_path = os.path.join(self.output_dir, "content", "%s.html" % uid)
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(text)
 
 
-    def render_page(self, this_id: int, node: Node, children: 'Dict[int, Node]') -> str:
+    def render_page(self, this_id: int, node: 'Union[Node, DocGroupNode]', children: 'Dict[int, Union[Node, DocGroupNode]]') -> str:
 
-        def field_order(x):
+        def field_order(x: 'Any') -> 'Any':
             if not self.reverse_fields:
                 return reversed(x)
             else:
@@ -404,6 +638,7 @@ class HTMLExporter:
             'get_enum_desc': self.get_enum_html_desc,
             'get_node_desc': self.get_node_html_desc,
             'get_child_addr_digits': self.get_child_addr_digits,
+            'get_node_path': self.get_node_path,
             'show_signals': self.show_signals,
             'has_extra_property_doc': self.has_extra_property_doc,
             'extra_properties': self.extra_properties,
@@ -423,7 +658,10 @@ class HTMLExporter:
         }
         context.update(self.user_context)
 
-        template = self.jj_env.get_template(self._template_map[type(node)])
+        template_name = "doc_group.html"
+        if not isinstance(node, DocGroupNode):
+            template_name = self._template_map[type(node)] # type: ignore[index]
+        template = self.jj_env.get_template(template_name)
         return template.render(context)
 
 
@@ -615,7 +853,9 @@ class HTMLExporter:
         if increment_heading > 0:
             def img_transform_callback(m: 're.Match') -> str:
                 dom = xml.dom.minidom.parseString(m.group(0))
-                img_src = dom.childNodes[0].attributes["src"].value
+                img_node = dom.childNodes[0]
+                assert img_node.attributes is not None
+                img_src = img_node.attributes["src"].value
 
                 if os.path.isabs(img_src):
                     # Absolute local path, or root URL
@@ -636,7 +876,7 @@ class HTMLExporter:
                             data = f.read()
                         mime_type = mimetypes.guess_type(img_src)[0] or "application/octet-stream"
                         encoded = base64.b64encode(data).decode('ascii')
-                        dom.childNodes[0].attributes["src"].value = "data:%s;base64,%s" % (mime_type, encoded)
+                        img_node.attributes["src"].value = "data:%s;base64,%s" % (mime_type, encoded)
                     else:
                         with open(img_src, 'rb') as f:
                             md5 = hashlib.md5(f.read()).hexdigest()
@@ -645,7 +885,7 @@ class HTMLExporter:
                             "%s_%s" % (md5[0:8], os.path.basename(img_src))
                         )
                         shutil.copyfile(img_src, new_path)
-                        dom.childNodes[0].attributes["src"].value = os.path.join(
+                        img_node.attributes["src"].value = os.path.join(
                             "content",
                             "%s_%s" % (md5[0:8], os.path.basename(img_src))
                         )
@@ -692,7 +932,7 @@ class HTMLExporter:
                 return True
         return False
 
-    def get_view_source_info(self, node: Node) -> 'Tuple[Optional[str], Optional[str]]':
+    def get_view_source_info(self, node: 'Union[Node, DocGroupNode]') -> 'Tuple[Optional[str], Optional[str]]':
         """
         Attempt to derive the node definition's source code sharelink using
         GitMeTheURL.
@@ -700,6 +940,8 @@ class HTMLExporter:
         Returns None if not found
         """
         if not self.generate_source_links:
+            return None, None
+        if isinstance(node, DocGroupNode):
             return None, None
 
         src_ref = node.def_src_ref or node.inst_src_ref
@@ -720,16 +962,26 @@ class HTMLExporter:
         except Exception: # pylint: disable=broad-except
             return None, None
 
-    def get_node_uid(self, node: Node) -> str:
+    def get_node_uid(self, node_id: int) -> str:
         """
         Returns the node's UID string
         """
-        node_path = node.get_rel_path(self.current_top_node.parent, array_suffix="", empty_array_suffix="")
+        node_path = self.get_node_path(node_id)
         path_hash = hashlib.sha1(node_path.encode('utf-8')).hexdigest()
         return path_hash
 
 
-def has_description(node: Node) -> bool:
+    def get_node_path(self, node_id: int) -> str:
+        path_segments = [] # type: List[str]
+        current_id = node_id # type: Optional[int]
+        while current_id is not None:
+            node = self.RALData[current_id]
+            path_segments.insert(0, node["name"])
+            current_id = node["parent"]
+        return ".".join(path_segments)
+
+
+def has_description(node: 'Union[Node, DocGroupNode]') -> bool:
     """
     Test if node has a description defined
     """

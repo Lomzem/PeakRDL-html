@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any, List, cast
 
 from systemrdl import rdltypes, node
 
@@ -72,4 +72,4 @@ def stringify_property_ref(value: rdltypes.PropertyReference, owner_node: node.N
 
 
 def stringify_user_enum_type(value: rdltypes.UserEnum) -> str:
-    return value.__name__
+    return cast(Any, value).__name__

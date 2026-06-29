@@ -7,6 +7,7 @@ from .exporter import HTMLExporter
 
 if TYPE_CHECKING:
     import argparse
+    from argparse import _ActionsContainer
     from systemrdl.node import AddrmapNode
 
 
@@ -23,7 +24,7 @@ class Exporter(ExporterSubcommandPlugin):
     }
 
 
-    def add_exporter_arguments(self, arg_group: 'argparse.ArgumentParser') -> None:
+    def add_exporter_arguments(self, arg_group: '_ActionsContainer') -> None:
         arg_group.add_argument(
             "--title",
             dest="title",
@@ -95,7 +96,7 @@ class SingleFileExporter(ExporterSubcommandPlugin):
         "reverse_fields": schema.Boolean(),
     }
 
-    def add_exporter_arguments(self, arg_group: 'argparse.ArgumentParser') -> None:
+    def add_exporter_arguments(self, arg_group: '_ActionsContainer') -> None:
         arg_group.add_argument(
             "--title",
             dest="title",
