@@ -1,7 +1,7 @@
 ## Tools
 
-- `systemrdl-lsp` CLI tool for language server. See @external-repos/systemrdl-pro/packages/systemrdl-lsp/README.md for more information.
-- Use `uv` for Python package management and virtual environments
+- `systemrdl-lsp` CLI tool for language server. See @external/repos/systemrdl-pro/README.md for more information.
+- Use `uv` for Python package management and virtual environments.
 
 ## Resources
 
