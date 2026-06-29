@@ -20,7 +20,7 @@ class AddressSearch {
             if(result != null) {
                 var result_id = result[0];
                 var idx_stack = result[1];
-                var text_segments = [RAL.get_path(result_id, idx_stack)];
+                var text_segments = [RAL.get_path(result_id, idx_stack) + " " + RAL.format_address(addr, 2)];
 
                 add_search_result(
                     text_segments,

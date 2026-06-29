@@ -40,18 +40,35 @@ img {
     flex-direction: column;
 }
 #_SBTree {
-    display: inline-flex;
+    display: flex;
     flex-direction: column;
-    min-width: max-content;
+    min-width: 0;
+    width: 100%;
 }
 
 .node {
     flex-direction: row;
     display: flex;
     flex-shrink: 0;
+    box-sizing: border-box;
+    min-width: 0;
+    width: 100%;
 }
 .node-link {
+    display: flex;
     flex-grow: 1;
+    gap: 1em;
+    justify-content: space-between;
+    min-width: 0;
+}
+.node-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.node-address {
+    flex-shrink: 0;
 }
 
 .node-icon {
@@ -60,10 +77,12 @@ img {
 }
 
 .node-children {
+    box-sizing: border-box;
     padding-left: 1em;
-    display: inline-flex;
+    display: flex;
     flex-direction: column;
-    min-width: max-content;
+    min-width: 0;
+    width: 100%;
 }
 
 .pack-v {
@@ -131,10 +150,6 @@ img {
 
 .crumb-idx {
     cursor:pointer;
-}
-
-#_AbsAddr div {
-    cursor: pointer;
 }
 
 #_SearchResults{

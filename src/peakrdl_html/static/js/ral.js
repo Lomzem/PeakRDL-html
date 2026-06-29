@@ -347,6 +347,19 @@ class RAL {
         }
     }
 
+    static format_address(addr, min_digits){
+        if(typeof min_digits === "undefined") min_digits = 1;
+        var s = addr.toString(16);
+        while(s.length < min_digits){
+            s = "0" + s;
+        }
+        return("0x" + s);
+    }
+
+    static get_absolute_addr_text(id, min_digits){
+        return(this.format_address(this.get_absolute_addr(id), min_digits));
+    }
+
     static get_total_size(id){
         var node = this.get_node(id);
         // Total size of entire array of this node

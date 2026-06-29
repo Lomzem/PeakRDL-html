@@ -642,6 +642,11 @@ class HTMLExporter:
             'get_node_desc': self.get_node_html_desc,
             'get_child_addr_digits': self.get_child_addr_digits,
             'get_node_path': self.get_node_path,
+            'get_node_offset': self.get_node_offset,
+            'get_node_abs_addr': self.get_node_abs_addr,
+            'get_node_total_size': self.get_node_total_size,
+            'get_table_addr_digits': self.get_table_addr_digits,
+            'format_addr': self.format_addr,
             'show_signals': self.show_signals,
             'has_extra_property_doc': self.has_extra_property_doc,
             'extra_properties': self.extra_properties,
@@ -822,6 +827,53 @@ class HTMLExporter:
 
     def get_child_addr_digits(self, node: AddressableNode) -> int:
         return math.ceil(math.log2(node.size) / 4)
+
+
+    def get_node_offset(self, node_id: int) -> int:
+        offset = self.RALData[node_id]["offset"]
+        assert isinstance(offset, BigInt)
+        return offset.v
+
+
+    def get_node_total_size(self, node_id: int) -> int:
+        node = self.RALData[node_id]
+        size = node["size"]
+        assert isinstance(size, BigInt)
+
+        if "dims" not in node:
+            return size.v
+
+        stride = node["stride"]
+        dims = node["dims"]
+        assert isinstance(stride, BigInt)
+        assert isinstance(dims, list)
+
+        num_elements = 1
+        for dim in dims:
+            num_elements *= dim
+        return stride.v * (num_elements - 1) + size.v
+
+
+    def get_node_abs_addr(self, node_id: int) -> int:
+        addr = self.get_node_offset(node_id)
+        parent_id = self.RALData[node_id]["parent"]
+        while parent_id is not None:
+            assert isinstance(parent_id, int)
+            addr += self.get_node_offset(parent_id)
+            parent_id = self.RALData[parent_id]["parent"]
+        return addr
+
+
+    def get_table_addr_digits(self, this_id: int, child_ids: 'List[int]') -> int:
+        max_addr = self.get_node_abs_addr(this_id)
+        for child_id in child_ids:
+            child_end = self.get_node_abs_addr(child_id) + self.get_node_total_size(child_id) - 1
+            max_addr = max(max_addr, child_end)
+        return max(2, math.ceil(max_addr.bit_length() / 4))
+
+
+    def format_addr(self, addr: int, digits: int) -> str:
+        return "0x{n:0{width}X}".format(n=addr, width=digits)
 
 
     def get_node_html_desc(self, node: Node, increment_heading: int=0) -> 'Optional[str]':

@@ -2,7 +2,7 @@
 
 {%- macro reserved_addr(addr, addr_digits) -%}
 <tr class="reserved-addr">
-    <td class="address">{{"0x{n:0{width}X}".format(n=addr, width=addr_digits)}}</td>
+    <td class="address">{{format_addr(addr, addr_digits)}}</td>
     <td>-</td>
     <td>-</td>
     <td></td>
@@ -12,20 +12,21 @@
 {%- block content %}
 <table border="1">
     <tr>
-        <th>Offset</th>
+        <th>Address</th>
         <th>Identifier</th>
         <th>Name</th>
         <th></th>
     </tr>
-    {%- set addr_digits = get_child_addr_digits(node) -%}
+    {%- set addr_digits = get_table_addr_digits(this_id, children.keys()|list) -%}
     {%- for child_id,child in children.items() %}
-    {%- if loop.first and child.raw_address_offset != 0 %}
-    {{reserved_addr(child.raw_address_offset-1, addr_digits)}}
-    {%- elif (not loop.first) and (loop.previtem[1].inst.addr_offset + loop.previtem[1].total_size) < child.raw_address_offset %}
-    {{reserved_addr(loop.previtem[1].inst.addr_offset + loop.previtem[1].total_size, addr_digits)}}
+    {%- set child_addr = get_node_abs_addr(child_id) -%}
+    {%- if loop.first and get_node_offset(child_id) != 0 %}
+    {{reserved_addr(child_addr-1, addr_digits)}}
+    {%- elif (not loop.first) and (get_node_abs_addr(loop.previtem[0]) + get_node_total_size(loop.previtem[0])) < child_addr %}
+    {{reserved_addr(get_node_abs_addr(loop.previtem[0]) + get_node_total_size(loop.previtem[0]), addr_digits)}}
     {%- endif %}
     <tr id="{{child.inst_name}}">
-        <td class="address">{{"0x{n:0{width}X}".format(n=child.raw_address_offset, width=addr_digits)}}</td>
+        <td class="address">{{format_addr(child_addr, addr_digits)}}</td>
         <td><a href="?p={{get_node_path(child_id)}}" data-id="{{child_id}}" onclick="onClickNodeLink(event); return(false)">
             {%- if child.is_array -%}
                 {{child.inst_name}}{% for dim in child.array_dimensions %}[{{dim}}]{% endfor %}

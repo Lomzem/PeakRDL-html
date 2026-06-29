@@ -144,15 +144,24 @@ class Sidebar {
         link.href = "?p=" + RAL.get_path(id, null, false);
         link.className = "node-link";
         link.onclick = onClickTreeLink;
+        var name_span = document.createElement("span");
+        name_span.className = "node-name";
         if(RAL.is_array(id)){
             var txt = node.name;
             for(var i=0; i<node.dims.length; i++) {
                 txt += "[]";
             }
-            link.innerHTML = txt;
+            name_span.innerHTML = txt;
         } else {
-            link.innerHTML = node.name;
+            name_span.innerHTML = node.name;
         }
+        link.appendChild(name_span);
+
+        var addr_span = document.createElement("span");
+        addr_span.className = "node-address";
+        addr_span.dataset.id = id;
+        addr_span.innerHTML = RAL.get_absolute_addr_text(id, 2);
+        link.appendChild(addr_span);
         div.appendChild(link);
 
         if(node.children.length > 0){
@@ -182,6 +191,14 @@ class Sidebar {
         el = this.#get_node_el(id);
         el.classList.add("selected");
         this.#selected_node_id = id;
+    }
+
+    static refresh_addresses() {
+        var addr_els = document.getElementsByClassName("node-address");
+        for(var i=0; i<addr_els.length; i++){
+            var id = parseInt(addr_els[i].dataset.id);
+            addr_els[i].innerHTML = RAL.get_absolute_addr_text(id, 2);
+        }
     }
 
     static #onResizeMouseDown(e) {
